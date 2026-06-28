@@ -1,7 +1,4 @@
 # data_generation/03_generate_billing.py
-"""Clean monthly billing -> data/raw/fact_billing_clean.parquet.
-   USAGE line = sum of expected_charge; RENTAL line = plan rental.
-   Ties out to fact_usage by construction (no anomalies yet)."""
 import hashlib
 import numpy as np
 import pandas as pd
@@ -9,7 +6,7 @@ import pandas as pd
 
 def roll_usage_to_month(usage: pd.DataFrame) -> pd.DataFrame:
     df = usage.copy()
-    df['month_start'] = df['usage_date'].dt.to_period('M').dt.to_timestamp()
+    df['month_start'] = df['usage_date']
     return df.groupby(['customer_id', 'month_start']).agg(
         usage_amt=('expected_charge', 'sum')
     ).reset_index()
@@ -18,10 +15,6 @@ def roll_usage_to_month(usage: pd.DataFrame) -> pd.DataFrame:
 def build_clean_billing(usage_monthly: pd.DataFrame,
                         customers: pd.DataFrame,
                         plans: pd.DataFrame) -> pd.DataFrame:
-    """Emit RENTAL + USAGE lines per active customer-month.
-    RENTAL.billed_amount = monthly_rental (from base_plan_id).
-    USAGE.billed_amount  = usage_amt (0 or skipped — your documented choice).
-    Add bill_line_hash, then bill_id. Columns per the contract."""
     # → vectorised; build the two line-types as frames and concat.
     
     # Merge usage_monthly with customers to get base_plan_id

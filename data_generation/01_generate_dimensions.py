@@ -123,6 +123,9 @@ def make_customers(n: int) -> pd.DataFrame:
         "complaint_count": complaint_count,
     })
 
+    df["signup_date"] = df["signup_date"].dt.date
+    df["churn_date"]  = df["churn_date"].dt.date
+
     return df
 
 
@@ -142,7 +145,7 @@ def make_date_dim() -> pd.DataFrame:
         "month_name": dates.strftime("%b"),
         "day_of_week": dates.weekday,
         "is_weekend": dates.weekday >= 5,
-        "month_start": dates.to_period("M").to_timestamp().date,
+        "month_start": dates.to_period("M").to_timestamp(),
     })
 
     # Ensure column order matches ADR-004
@@ -157,6 +160,9 @@ def make_date_dim() -> pd.DataFrame:
         "is_weekend",
         "month_start",
     ]]
+
+    df["date"] = df["date"].dt.date
+    df["month_start"] = df["month_start"].dt.date
 
     return df
 

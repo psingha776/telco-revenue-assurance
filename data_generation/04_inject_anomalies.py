@@ -1,7 +1,4 @@
 # data_generation/04_inject_anomalies.py
-"""Inject revenue-leakage anomalies into clean billing.
-   Writes fact_billing.parquet (final) and anomaly_ledger.parquet (answer key).
-   Records amount_impact (billed - clean) for every change."""
 import numpy as np
 import pandas as pd
 from config import (SEED, DUP_CHARGE_RATE, UNBILLED_USAGE_RATE,
@@ -143,9 +140,6 @@ def inject_rating_errors(billing: pd.DataFrame, plans: pd.DataFrame) -> pd.DataF
 
 def inject_downgrades(billing: pd.DataFrame, customers: pd.DataFrame,
                       plans: pd.DataFrame) -> pd.DataFrame:
-    """For DOWNGRADE_PRE_CHURN of churners, last 1-2 active months:
-    switch RENTAL plan_id to next-cheaper same-type plan, lower rental.
-    Log PRE_CHURN_DOWNGRADE (amount_impact = rental delta)."""
     
     # Filter to RENTAL lines only
     rental_mask = billing['charge_type'] == 'RENTAL'

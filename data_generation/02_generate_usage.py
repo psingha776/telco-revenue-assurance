@@ -46,11 +46,6 @@ def active_months(customers: pd.DataFrame, date_dim: pd.DataFrame) -> pd.DataFra
 
 
 def generate_events(active: pd.DataFrame, plans: pd.DataFrame) -> pd.DataFrame:
-    """For each active customer-month, draw ~Poisson(EVENTS_PER_CUST_MONTH)
-    events. Per event: pick event_type, draw units from a type-appropriate
-    distribution scaled by segment/plan intensity, place usage_date within
-    the month, look up the per-unit rate from the customer's plan, compute
-    expected_charge. Concatenate to one DataFrame; assign usage_id last."""
     # → build per-type arrays with numpy and np.concatenate; avoid row loops.
     active = active.copy()
     # ensure month_start is datetime
@@ -121,6 +116,8 @@ def generate_events(active: pd.DataFrame, plans: pd.DataFrame) -> pd.DataFrame:
         'units': units,
         'plan_id': plan_ids
     })
+
+    events["usage_date"] = events["usage_date"].dt.date
 
     # Ensure plans contains expected rate columns and join
     rate_cols = ['plan_id', 'per_min_rate', 'per_gb_rate', 'per_sms_rate']

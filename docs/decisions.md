@@ -118,4 +118,11 @@ Date: 2026-06-16
 | **RATING_ERROR** | sample `RATING_ERROR_RATE` of USAGE lines; recompute as if a **neighbouring plan's** per-unit rate applied | ↑ or ↓ | falls to the `RATING_VARIANCE` branch |
 | **PRE_CHURN_DOWNGRADE** | for `DOWNGRADE_PRE_CHURN` of churners, in the last 1–2 active months set the RENTAL `plan_id` to the next-cheaper plan and lower the rental | rental ↓ | *not* a leakage — a **churn signal** via `LAG(plan_id)` |
  
+## ADR-008: Hypothetical data selction rates
+Date: 2026-06-22
+**`3 transform layers in Snowflake for convenience`** - RAW mirrors the source so a reload is idempotent; STAGING owns typing and is where real-world cleaning would sit; MARTS is the materialised star the BI tool reads. Splitting them means I can re-run any layer without re-loading files.
+
+## ADR-009: Error snowflake.connector.errors.ProgrammingError: 100071 (22000): Failed to cast variant value 1630454400000 to DATE
+Date: 2026-06-22
+**`Need to fix generators and regenerate`** - Issue is that date columns in generated files are landing as datetime64 with millisecond. Safest bet is regenerate the data with safe date format. Cast during COPY INTO is messier as tools like power BI down the pipeline will also face issues over this.
 
