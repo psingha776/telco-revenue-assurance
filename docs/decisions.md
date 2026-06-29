@@ -126,3 +126,7 @@ Date: 2026-06-22
 Date: 2026-06-22
 **`Need to fix generators and regenerate`** - Issue is that date columns in generated files are landing as datetime64 with millisecond. Safest bet is regenerate the data with safe date format. Cast during COPY INTO is messier as tools like power BI down the pipeline will also face issues over this.
 
+## ADR-010: views vs tables
+Date: 2026-06-29
+**`STAGING as views`** - no storage cost, always reflects RAW, and the data's small enough that recompute is free. I'd materialise to tables only if a downstream query re-read them hot.
+
