@@ -130,3 +130,9 @@ Date: 2026-06-22
 Date: 2026-06-29
 **`STAGING as views`** - no storage cost, always reflects RAW, and the data's small enough that recompute is free. I'd materialise to tables only if a downstream query re-read them hot.
 
+## ADR-011: STAR schema
+Date: 2026-07-01
+* Grain: event grain on FACT_USAGE, customer-month × charge_type on FACT_BILLING, customer-day on FACT_USAGE_DAILY. The reconciliation needs the first two; the rolling window needs the third.
+* Keys: surrogate keys attached from the dims; natural keys retained on facts for readable ad-hoc SQL.
+* Why CTAS, not views, for MARTS: the BI model and Phase-3 queries re-read these repeatedly, so materialising once beats recomputing every query.
+
