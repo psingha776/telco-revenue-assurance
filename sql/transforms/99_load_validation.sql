@@ -43,5 +43,5 @@ WITH exp AS (
 ), bil AS (
   SELECT customer_key, bill_month m, SUM(billed_amount) b
   FROM TELCO_RA.MARTS.FACT_BILLING WHERE charge_type = 'Usage' GROUP BY 1, 2
-)
+)  
 SELECT COUNT(*) AS matched_customer_months FROM exp JOIN bil USING (customer_key, m);
