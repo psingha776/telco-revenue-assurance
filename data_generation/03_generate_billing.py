@@ -6,7 +6,7 @@ import pandas as pd
 
 def roll_usage_to_month(usage: pd.DataFrame) -> pd.DataFrame:
     df = usage.copy()
-    df['month_start'] = df['usage_date']
+    df['month_start'] = df['usage_date'].apply(lambda d: d.replace(day=1))
     return df.groupby(['customer_id', 'month_start']).agg(
         usage_amt=('expected_charge', 'sum')
     ).reset_index()

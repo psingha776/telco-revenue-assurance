@@ -1,5 +1,6 @@
 # data_generation/00_validate.py — sanity gate before Snowflake load
 import pandas as pd
+from config import MONTHS
 
 usage   = pd.read_parquet("data/raw/fact_usage.parquet")
 clean   = pd.read_parquet("data/raw/fact_billing_clean.parquet")
@@ -17,3 +18,7 @@ assert abs((final.billed_amount.sum() - clean.billed_amount.sum()) - impact) < 1
 print("OK — usage ties to clean billing; all deviation is ledgered")
 print(f"rows  usage={len(usage):,}  billing={len(final):,}  ledger={len(ledger):,}")
 print(ledger["anomaly_type"].value_counts())
+
+bad = final.loc[pd.to_datetime(final["bill_month"]).dt.day != 1]
+assert bad.empty, f"{len(bad)} bill_month values are not month-aligned"
+assert final["bill_month"].nunique() <= MONTHS, "more distinct bill_months than months"

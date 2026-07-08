@@ -28,4 +28,4 @@ SELECT
 FROM TELCO_RA.STAGING.FACT_BILLING b
 JOIN TELCO_RA.MARTS.DIM_CUSTOMER c ON c.customer_id = b.customer_id
 JOIN TELCO_RA.MARTS.DIM_PLAN     p ON p.plan_id     = b.plan_id
-JOIN TELCO_RA.MARTS.DIM_DATE     d ON d.month_start = b.bill_month;
+JOIN TELCO_RA.MARTS.DIM_DATE     d ON d."DATE"      = b.bill_month;
