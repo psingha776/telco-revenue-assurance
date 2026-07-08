@@ -136,3 +136,29 @@ Date: 2026-07-01
 * Keys: surrogate keys attached from the dims; natural keys retained on facts for readable ad-hoc SQL.
 * Why CTAS, not views, for MARTS: the BI model and Phase-3 queries re-read these repeatedly, so materialising once beats recomputing every query.
 
+## ADR-012: bill_month must be the month key (bug fix)
+Date: 2026-07-08
+Symptom: after the star-schema build, MARTS.FACT_BILLING (4,211,045) didn't match
+RAW.FACT_BILLING (4,205,750). Orphan LEFT JOIN checks were clean, so it wasn't a
+missing dimension key.
+
+Root cause: the billing generator wrote a scattered daily date into bill_month
+instead of the month start — 546 distinct values where there should be 18. The MARTS
+join to dim_date fanned the ~3% of bills that happened to land on the 1st (x~30) and
+dropped the rest; the two effects nearly cancelled, so the count looked "close" and
+slipped past the Phase-1 tie-out (which sums grand totals and is blind to
+month-alignment).
+
+Fix: derive bill_month = start of usage_date's month inside roll_usage_to_month(), so
+the usage rollup groups by calendar month and the label is the month key. Applied the
+same alignment to the anomaly ledger. Kept the MARTS join on the unique dim_date "DATE"
+column.
+
+Guard: 00_validate.py now asserts every bill_month is the 1st and that distinct
+bill_months <= MONTHS, so this can't recur silently.
+
+Why it's worth writing down: the cross-layer row-count assertion (MARTS == RAW) is what
+caught this — the orphan check couldn't, because a LEFT JOIN detects under-matching, not
+over-matching. That's the case for keeping a count check alongside referential-integrity
+checks, not instead of them.
+
