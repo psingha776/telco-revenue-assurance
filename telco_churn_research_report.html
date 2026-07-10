@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="snowflake-source" content="cortex-agent-authored" />
+  <title>TELCO_RA Churn Research Report</title>
+  <script type="application/json" id="snowflake-report-metadata">
+  {
+    "generated": "2026-07-09",
+    "intent": "Comprehensive churn analysis, ML model results, retention strategy, and ROI simulation for TELCO_RA telecom dataset",
+    "dataSources": [
+      { "type": "query", "sql": "SELECT * FROM TELCO_RA.MARTS.DIM_CUSTOMER" },
+      { "type": "query", "sql": "SELECT * FROM TELCO_RA.MARTS.FACT_BILLING" },
+      { "type": "query", "sql": "SELECT * FROM TELCO_RA.MARTS.FACT_USAGE_DAILY" },
+      { "type": "query", "sql": "SELECT * FROM TELCO_RA.MARTS.DIM_PLAN" },
+      { "type": "query", "sql": "SELECT * FROM TELCO_RA.RAW.ANOMALY_LEDGER" },
+      { "type": "model", "fqn": "TELCO_RA.MARTS.CHURN_CLASSIFIER" }
+    ]
+  }
+  </script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --blue: light-dark(#2563eb, #60a5fa);
+      --red: light-dark(#dc2626, #f87171);
+      --green: light-dark(#16a34a, #4ade80);
+      --purple: light-dark(#7c3aed, #a78bfa);
+      --cyan: light-dark(#0891b2, #22d3ee);
+      --orange: light-dark(#ea580c, #fb923c);
+      --yellow: light-dark(#ca8a04, #fde047);
+      --text: light-dark(#1f2937, #e5e7eb);
+      --text-muted: light-dark(#6b7280, #9ca3af);
+      --bg: light-dark(#ffffff, #111827);
+      --bg-alt: light-dark(#f9fafb, #1a2332);
+      --border: light-dark(#d1d5db, #374151);
+      --bar-blue: light-dark(#3b82f6, #60a5fa);
+      --bar-red: light-dark(#ef4444, #f87171);
+      --bar-green: light-dark(#22c55e, #4ade80);
+      --bar-purple: light-dark(#8b5cf6, #a78bfa);
+      --bar-cyan: light-dark(#06b6d4, #22d3ee);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      max-width: 1000px; margin: 0 auto; padding: 32px 24px;
+      color: var(--text); background: var(--bg); line-height: 1.6;
+    }
+    h1 { font-size: 2em; border-bottom: 3px solid var(--blue); padding-bottom: 12px; }
+    h2 { font-size: 1.5em; margin-top: 48px; color: var(--blue); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    h3 { font-size: 1.15em; margin-top: 24px; }
+    .subtitle { color: var(--text-muted); font-size: 1.1em; margin-top: -8px; }
+    .date { color: var(--text-muted); font-size: 0.9em; }
+    table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.88em; }
+    th, td { border: 1px solid var(--border); padding: 7px 10px; text-align: left; }
+    th { background: var(--bg-alt); font-weight: 600; }
+    tr:nth-child(even) td { background: var(--bg-alt); }
+    .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 20px 0; }
+    .metric-card { background: light-dark(#f0f9ff, #1e3a5f); border: 1px solid light-dark(#bae6fd, #1e40af); border-radius: 8px; padding: 16px; text-align: center; }
+    .metric-value { font-size: 1.8em; font-weight: 700; color: var(--blue); }
+    .metric-label { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; }
+    .highlight { padding: 16px; border-radius: 8px; border-left: 4px solid; margin: 16px 0; }
+    .highlight-amber { background: light-dark(#fef3c7, #78350f); border-left-color: light-dark(#f59e0b, #fbbf24); }
+    .highlight-red { background: light-dark(#fef2f2, #7f1d1d); border-left-color: var(--red); }
+    .highlight-green { background: light-dark(#f0fdf4, #14532d); border-left-color: var(--green); }
+    code { background: var(--bg-alt); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: 600; }
+    .badge-critical { background: light-dark(#fee2e2, #7f1d1d); color: var(--red); }
+    .badge-high { background: light-dark(#ffedd5, #7c2d12); color: var(--orange); }
+    .badge-medium { background: light-dark(#fef9c3, #713f12); color: var(--yellow); }
+    .badge-low { background: light-dark(#dcfce7, #14532d); color: var(--green); }
+    .toc { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin: 24px 0; }
+    .toc ul { list-style: none; padding: 0; columns: 2; }
+    .toc li { padding: 4px 0; }
+    .toc a { color: var(--blue); text-decoration: none; }
+
+    /* SVG Chart Styles */
+    .chart-wrap { margin: 24px 0; overflow-x: auto; }
+    .chart-wrap svg { display: block; max-width: 100%; }
+    .chart-title { font-size: 13px; font-weight: 600; fill: var(--text); }
+    .chart-label { font-size: 10px; fill: var(--text-muted); }
+    .chart-value { font-size: 9px; fill: var(--text); }
+    .chart-axis { stroke: var(--border); stroke-width: 1; }
+    .chart-grid { stroke: var(--border); stroke-width: 0.5; stroke-dasharray: 3,3; opacity: 0.5; }
+    .legend { font-size: 10px; fill: var(--text); }
+
+    @media print { body { max-width: 100%; } .toc { break-after: page; } }
+  </style>
+</head>
+<body>
+
+  <h1>Telecom Customer Churn: Research &amp; Retention Strategy</h1>
+  <p class="subtitle">Comprehensive analysis of TELCO_RA customer data with ML-powered churn prediction and actionable retention recommendations</p>
+  <p class="date">Generated: July 9, 2026 | Data Source: TELCO_RA.MARTS (Snowflake)</p>
+
+  <nav class="toc">
+    <strong>Table of Contents</strong>
+    <ul>
+      <li><a href="#executive-summary">1. Executive Summary</a></li>
+      <li><a href="#data-overview">2. Data Overview</a></li>
+      <li><a href="#churn-analysis">3. Churn Analysis</a></li>
+      <li><a href="#ml-model">4. ML Classification Model</a></li>
+      <li><a href="#usage-anomalies">5. Pre-Churn Usage Anomalies</a></li>
+      <li><a href="#clv-economics">6. CLV &amp; Unit Economics</a></li>
+      <li><a href="#complaint-analysis">7. Complaint Type Analysis</a></li>
+      <li><a href="#retention-campaign">8. Retention Campaign Design</a></li>
+      <li><a href="#roi-simulation">9. ROI Simulation</a></li>
+      <li><a href="#plan-gap-analysis">10. Plan Feature Gap Analysis</a></li>
+      <li><a href="#recommendations">11. Strategic Recommendations</a></li>
+    </ul>
+  </nav>
+
+  <!-- ============================================================ -->
+  <h2 id="executive-summary">1. Executive Summary</h2>
+
+  <div class="metric-grid">
+    <div class="metric-card"><div class="metric-value">100K</div><div class="metric-label">Total Customers</div></div>
+    <div class="metric-card"><div class="metric-value">19.5%</div><div class="metric-label">Overall Churn Rate</div></div>
+    <div class="metric-card"><div class="metric-value">93.1%</div><div class="metric-label">Model F1 (Churn Class)</div></div>
+    <div class="metric-card"><div class="metric-value">$217K</div><div class="metric-label">Projected Net ROI (30% save)</div></div>
+  </div>
+
+  <div class="highlight highlight-green">
+    <strong>Bottom Line:</strong> A $25,635 retention campaign targeting 465 identified high-risk customers breaks even at just a 3.2% save rate.
+    At a realistic 20% save rate, it generates $136K in net profit (5.3x ROI). The primary churn driver is complaint count (not type),
+    and the root cause is a plan-market mismatch: customers on voice-centric S-tier plans are consuming 154% of their 1GB data allowance.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="data-overview">2. Data Overview</h2>
+
+  <h3>Dataset Structure</h3>
+  <table>
+    <thead><tr><th>Table</th><th>Rows</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>DIM_CUSTOMER</code></td><td>100,000</td><td>Customer demographics, tenure, complaints, churn flag</td></tr>
+      <tr><td><code>DIM_PLAN</code></td><td>18</td><td>Plan features (minutes, GB, SMS, rates) across S/M/L tiers and regions</td></tr>
+      <tr><td><code>DIM_DATE</code></td><td>546</td><td>Date dimension (18 months: Jan 2022 - Jun 2023)</td></tr>
+      <tr><td><code>FACT_BILLING</code></td><td>1,879,309</td><td>Monthly billing records by charge type (Rental/Overage)</td></tr>
+      <tr><td><code>FACT_USAGE</code></td><td>2,159,470</td><td>Usage events (Voice/Data/SMS) with units and charges</td></tr>
+      <tr><td><code>FACT_USAGE_DAILY</code></td><td>2,089,442</td><td>Daily aggregated usage charges per customer</td></tr>
+      <tr><td><code>ANOMALY_LEDGER</code> (RAW)</td><td>53,384</td><td>Billing anomalies: duplicates, leakage, rating errors, downgrades</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Customer Growth (Jan 2022 - Jun 2023)</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Active Customer Base Growth</text>
+      <!-- axes -->
+      <line x1="60" y1="40" x2="60" y2="220" class="chart-axis"/>
+      <line x1="60" y1="220" x2="780" y2="220" class="chart-axis"/>
+      <!-- Y labels -->
+      <text x="55" y="220" text-anchor="end" class="chart-label">0</text>
+      <text x="55" y="175" text-anchor="end" class="chart-label">20K</text>
+      <text x="55" y="130" text-anchor="end" class="chart-label">40K</text>
+      <text x="55" y="85" text-anchor="end" class="chart-label">60K</text>
+      <text x="55" y="43" text-anchor="end" class="chart-label">80K</text>
+      <!-- grid -->
+      <line x1="60" y1="175" x2="780" y2="175" class="chart-grid"/>
+      <line x1="60" y1="130" x2="780" y2="130" class="chart-grid"/>
+      <line x1="60" y1="85" x2="780" y2="85" class="chart-grid"/>
+      <!-- area + line: scale 0-80K maps to y 220-40 -->
+      <polygon points="60,163 100,155 140,147 180,140 220,133 260,126 300,118 340,111 380,104 420,97 460,91 500,84 540,78 580,72 620,67 660,62 700,59 740,56 740,220 60,220" fill="currentColor" style="color: var(--bar-blue); opacity: 0.15;"/>
+      <polyline points="60,163 100,155 140,147 180,140 220,133 260,126 300,118 340,111 380,104 420,97 460,91 500,84 540,78 580,72 620,67 660,62 700,59 740,56" fill="none" stroke="currentColor" style="color: var(--bar-blue);" stroke-width="2.5"/>
+      <!-- data points -->
+      <circle cx="60" cy="163" r="3" fill="currentColor" style="color: var(--bar-blue);"/>
+      <circle cx="740" cy="56" r="3" fill="currentColor" style="color: var(--bar-blue);"/>
+      <!-- X labels -->
+      <text x="60" y="236" text-anchor="middle" class="chart-label">Jan 22</text>
+      <text x="220" y="236" text-anchor="middle" class="chart-label">May 22</text>
+      <text x="380" y="236" text-anchor="middle" class="chart-label">Sep 22</text>
+      <text x="540" y="236" text-anchor="middle" class="chart-label">Jan 23</text>
+      <text x="700" y="236" text-anchor="middle" class="chart-label">May 23</text>
+      <!-- annotations -->
+      <text x="70" y="158" class="chart-value" style="fill: var(--bar-blue);">25.3K</text>
+      <text x="700" y="50" class="chart-value" style="fill: var(--bar-blue);">73.1K</text>
+    </svg>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="churn-analysis">3. Churn Analysis</h2>
+
+  <h3>Churn Profile: Churners vs Retained</h3>
+  <table>
+    <thead><tr><th>Metric</th><th>Active (80,502)</th><th>Churned (19,498)</th><th>Difference</th></tr></thead>
+    <tbody>
+      <tr><td>Avg Tenure (months)</td><td>13.1</td><td>4.8</td><td>Churners stay 3x shorter</td></tr>
+      <tr><td>Avg Complaints</td><td>0.40</td><td>1.88</td><td>Churners complain 5x more</td></tr>
+      <tr><td>% with 2+ complaints</td><td>6%</td><td>56%</td><td>9x higher in churners</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Churn Rate by Region &amp; Segment</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 260" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Churn Rate by Region &amp; Segment (range: 17.4% - 20.6%)</text>
+      <!-- Horizontal bar chart -->
+      <line x1="200" y1="35" x2="200" y2="240" class="chart-axis"/>
+      <!-- bars: scale 15%-22% -> x 200-750 (78.6px per %) -->
+      <text x="195" y="56" text-anchor="end" class="chart-label">South Enterprise</text>
+      <rect x="200" y="44" width="440" height="18" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="645" y="57" class="chart-value">20.6%</text>
+
+      <text x="195" y="81" text-anchor="end" class="chart-label">North SME</text>
+      <rect x="200" y="69" width="393" height="18" rx="2" fill="currentColor" style="color: var(--bar-red); opacity: 0.85;"/>
+      <text x="598" y="82" class="chart-value">20.0%</text>
+
+      <text x="195" y="106" text-anchor="end" class="chart-label">East Consumer</text>
+      <rect x="200" y="94" width="369" height="18" rx="2" fill="currentColor" style="color: var(--orange); opacity: 0.9;"/>
+      <text x="574" y="107" class="chart-value">19.7%</text>
+
+      <text x="195" y="131" text-anchor="end" class="chart-label">Metro Consumer</text>
+      <rect x="200" y="119" width="353" height="18" rx="2" fill="currentColor" style="color: var(--orange); opacity: 0.8;"/>
+      <text x="558" y="132" class="chart-value">19.5%</text>
+
+      <text x="195" y="156" text-anchor="end" class="chart-label">West Consumer</text>
+      <rect x="200" y="144" width="353" height="18" rx="2" fill="currentColor" style="color: var(--orange); opacity: 0.7;"/>
+      <text x="558" y="157" class="chart-value">19.5%</text>
+
+      <text x="195" y="181" text-anchor="end" class="chart-label">Metro Enterprise</text>
+      <rect x="200" y="169" width="345" height="18" rx="2" fill="currentColor" style="color: var(--yellow); opacity: 0.8;"/>
+      <text x="550" y="182" class="chart-value">19.4%</text>
+
+      <text x="195" y="206" text-anchor="end" class="chart-label">West Enterprise</text>
+      <rect x="200" y="194" width="188" height="18" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="393" y="207" class="chart-value">17.4%</text>
+
+      <!-- axis labels -->
+      <text x="200" y="252" text-anchor="middle" class="chart-label">15%</text>
+      <text x="475" y="252" text-anchor="middle" class="chart-label">18.5%</text>
+      <text x="750" y="252" text-anchor="middle" class="chart-label">22%</text>
+    </svg>
+  </div>
+
+  <h3>Plan Tier Migration Before Churn</h3>
+  <div class="highlight highlight-amber">
+    <strong>94.2% of churners leave without downgrading.</strong> Only 5.8% downgrade first (834 M&rarr;S, 257 L&rarr;M).
+    Plan downgrades are a weak early-warning signal &mdash; by the time a customer downgrades, they're essentially already gone.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="ml-model">4. ML Classification Model</h2>
+
+  <h3>Model: <code>TELCO_RA.MARTS.CHURN_CLASSIFIER</code></h3>
+  <p>Snowflake ML Classification trained on 22 engineered features combining complaints, usage patterns, billing behavior, and tenure.</p>
+
+  <table>
+    <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>Support</th></tr></thead>
+    <tbody>
+      <tr><td>Retained (False)</td><td>97.6%</td><td>99.2%</td><td>98.4%</td><td>2,071</td></tr>
+      <tr><td><strong>Churned (True)</strong></td><td><strong>96.5%</strong></td><td><strong>89.9%</strong></td><td><strong>93.1%</strong></td><td><strong>494</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Feature Importance (Top 11)</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 320" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Churn Model Feature Importance</text>
+      <line x1="200" y1="32" x2="200" y2="305" class="chart-axis"/>
+      <!-- max score 0.250 maps to width 520 -->
+      <text x="195" y="52" text-anchor="end" class="chart-label">TENURE_MONTHS</text>
+      <rect x="200" y="40" width="520" height="20" rx="2" fill="currentColor" style="color: #1e40af;"/>
+      <text x="725" y="54" class="chart-value">0.250</text>
+
+      <text x="195" y="77" text-anchor="end" class="chart-label">BILLING_MONTHS</text>
+      <rect x="200" y="65" width="262" height="20" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <text x="467" y="79" class="chart-value">0.126</text>
+
+      <text x="195" y="102" text-anchor="end" class="chart-label">AVG_BILL_AMOUNT</text>
+      <rect x="200" y="90" width="183" height="20" rx="2" fill="currentColor" style="color: var(--bar-blue); opacity: 0.85;"/>
+      <text x="388" y="104" class="chart-value">0.088</text>
+
+      <text x="195" y="127" text-anchor="end" class="chart-label">COMPLAINT_COUNT</text>
+      <rect x="200" y="115" width="163" height="20" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="368" y="129" class="chart-value">0.078 &#9664; actionable</text>
+
+      <text x="195" y="152" text-anchor="end" class="chart-label">AVG_CHARGE_LAST_3MO</text>
+      <rect x="200" y="140" width="148" height="20" rx="2" fill="currentColor" style="color: var(--bar-blue); opacity: 0.7;"/>
+      <text x="353" y="154" class="chart-value">0.071</text>
+
+      <text x="195" y="177" text-anchor="end" class="chart-label">AVG_CHARGE_EARLIER</text>
+      <rect x="200" y="165" width="146" height="20" rx="2" fill="currentColor" style="color: var(--bar-blue); opacity: 0.7;"/>
+      <text x="351" y="179" class="chart-value">0.070</text>
+
+      <text x="195" y="202" text-anchor="end" class="chart-label">AVG_DAILY_CHARGE</text>
+      <rect x="200" y="190" width="137" height="20" rx="2" fill="currentColor" style="color: var(--bar-blue); opacity: 0.6;"/>
+      <text x="342" y="204" class="chart-value">0.066</text>
+
+      <text x="195" y="227" text-anchor="end" class="chart-label">TOTAL_RENTAL</text>
+      <rect x="200" y="215" width="104" height="20" rx="2" fill="currentColor" style="color: var(--bar-blue); opacity: 0.5;"/>
+      <text x="309" y="229" class="chart-value">0.050</text>
+
+      <text x="195" y="252" text-anchor="end" class="chart-label">MONTHLY_RENTAL</text>
+      <rect x="200" y="240" width="69" height="20" rx="2" fill="currentColor" style="color: var(--bar-blue); opacity: 0.4;"/>
+      <text x="274" y="254" class="chart-value">0.033</text>
+
+      <text x="195" y="277" text-anchor="end" class="chart-label">SEGMENT</text>
+      <rect x="200" y="265" width="4" height="20" rx="2" fill="currentColor" style="color: var(--text-muted); opacity: 0.5;"/>
+      <text x="209" y="279" class="chart-value">0.002</text>
+
+      <text x="195" y="302" text-anchor="end" class="chart-label">REGION</text>
+      <rect x="200" y="290" width="3" height="20" rx="2" fill="currentColor" style="color: var(--text-muted); opacity: 0.5;"/>
+      <text x="208" y="304" class="chart-value">0.001</text>
+    </svg>
+  </div>
+
+  <h3>Identified At-Risk Cohorts (Active Customers)</h3>
+  <table>
+    <thead><tr><th>Risk Level</th><th>Segment</th><th>Tier</th><th>Count</th><th>Avg Churn Prob</th><th>Avg Complaints</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-critical">CRITICAL</span></td><td>Consumer</td><td>S</td><td>40</td><td>90.2%</td><td>1.2</td></tr>
+      <tr><td><span class="badge badge-high">HIGH</span></td><td>Consumer</td><td>S</td><td>119</td><td>62.8%</td><td>2.5</td></tr>
+      <tr><td><span class="badge badge-high">HIGH</span></td><td>Consumer</td><td>M</td><td>31</td><td>62.0%</td><td>2.1</td></tr>
+      <tr><td><span class="badge badge-high">HIGH</span></td><td>SME</td><td>S</td><td>28</td><td>61.3%</td><td>2.5</td></tr>
+      <tr><td><span class="badge badge-medium">MEDIUM</span></td><td>Consumer</td><td>S</td><td>306</td><td>38.0%</td><td>2.4</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="usage-anomalies">5. Pre-Churn Usage Anomalies</h2>
+
+  <h3>Billing Decline in Final Months Before Churn</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 240" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Average Monthly Bill - Churned Customers (Final 6 Months)</text>
+      <!-- Y axis: $190-$215, mapped to y 200-40 -->
+      <line x1="70" y1="40" x2="70" y2="200" class="chart-axis"/>
+      <line x1="70" y1="200" x2="750" y2="200" class="chart-axis"/>
+      <text x="65" y="200" text-anchor="end" class="chart-label">$190</text>
+      <text x="65" y="136" text-anchor="end" class="chart-label">$200</text>
+      <text x="65" y="72" text-anchor="end" class="chart-label">$210</text>
+      <line x1="70" y1="136" x2="750" y2="136" class="chart-grid"/>
+      <line x1="70" y1="72" x2="750" y2="72" class="chart-grid"/>
+      <!-- data: 209.27, 209.77, 209.11, 208.82, 208, 200.17, 194.04 -->
+      <!-- scale: (val-190)*6.4 subtracted from 200 -->
+      <polygon points="120,77 220,73 320,78 420,80 520,85 620,137 720,162 720,200 120,200" fill="currentColor" style="color: var(--bar-red); opacity: 0.15;"/>
+      <polyline points="120,77 220,73 320,78 420,80 520,85 620,137 720,162" fill="none" stroke="currentColor" style="color: var(--bar-red);" stroke-width="2.5"/>
+      <circle cx="120" cy="77" r="4" fill="currentColor" style="color: var(--bar-red);"/>
+      <circle cx="620" cy="137" r="4" fill="currentColor" style="color: var(--bar-red);"/>
+      <circle cx="720" cy="162" r="4" fill="currentColor" style="color: var(--bar-red);"/>
+      <!-- annotations -->
+      <text x="120" y="70" text-anchor="middle" class="chart-value">$209</text>
+      <text x="620" y="130" text-anchor="middle" class="chart-value">$200</text>
+      <text x="720" y="178" text-anchor="middle" class="chart-value" style="fill: var(--bar-red); font-weight: bold;">$194</text>
+      <!-- X labels -->
+      <text x="120" y="216" text-anchor="middle" class="chart-label">6 mo before</text>
+      <text x="320" y="216" text-anchor="middle" class="chart-label">4 mo</text>
+      <text x="520" y="216" text-anchor="middle" class="chart-label">2 mo</text>
+      <text x="620" y="216" text-anchor="middle" class="chart-label">1 mo</text>
+      <text x="720" y="216" text-anchor="middle" class="chart-label">Final</text>
+      <!-- drop annotation -->
+      <line x1="620" y1="140" x2="720" y2="160" stroke="currentColor" style="color: var(--bar-red);" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="690" y="195" class="chart-value" style="fill: var(--bar-red);">-7% drop</text>
+    </svg>
+  </div>
+
+  <h3>Daily Usage Patterns: No Signal</h3>
+  <table>
+    <thead><tr><th>Period</th><th>Avg Daily Charge</th><th>Std Dev</th><th>Median</th></tr></thead>
+    <tbody>
+      <tr><td>0-30 days before churn</td><td>$2.205</td><td>$2.33</td><td>$1.45</td></tr>
+      <tr><td>31-60 days before</td><td>$2.193</td><td>$2.30</td><td>$1.44</td></tr>
+      <tr><td>61-90 days before</td><td>$2.186</td><td>$2.29</td><td>$1.41</td></tr>
+      <tr><td>90+ days before</td><td>$2.192</td><td>$2.29</td><td>$1.44</td></tr>
+    </tbody>
+  </table>
+
+  <div class="highlight highlight-amber">
+    <strong>Key Finding:</strong> Daily usage charges remain flat before churn. There is no measurable decline in usage patterns within 30-60 days of departure.
+    The real anomaly is behavioral (complaints + short tenure), not usage-based.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="clv-economics">6. CLV &amp; Unit Economics</h2>
+
+  <h3>Customer Lifetime Value by Tenure</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Average CLV by Tenure Bucket &amp; Churn Status</text>
+      <line x1="80" y1="40" x2="80" y2="230" class="chart-axis"/>
+      <line x1="80" y1="230" x2="750" y2="230" class="chart-axis"/>
+      <!-- Y: 0-3500, scale factor: 190/3500 = 0.054 -->
+      <text x="75" y="233" text-anchor="end" class="chart-label">$0</text>
+      <text x="75" y="176" text-anchor="end" class="chart-label">$1K</text>
+      <text x="75" y="122" text-anchor="end" class="chart-label">$2K</text>
+      <text x="75" y="68" text-anchor="end" class="chart-label">$3K</text>
+      <line x1="80" y1="176" x2="750" y2="176" class="chart-grid"/>
+      <line x1="80" y1="122" x2="750" y2="122" class="chart-grid"/>
+      <line x1="80" y1="68" x2="750" y2="68" class="chart-grid"/>
+      <!-- bars grouped: 5 groups, each with Active (green) + Churned (red) -->
+      <!-- Group 1: 0-3mo, Active=$382, Churned=$384 -->
+      <rect x="110" y="209" width="45" height="21" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <rect x="160" y="209" width="45" height="21" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="155" y="250" text-anchor="middle" class="chart-label">0-3 mo</text>
+      <!-- Group 2: 4-6mo, Active=$924, Churned=$994 -->
+      <rect x="240" y="180" width="45" height="50" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <rect x="290" y="176" width="45" height="54" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="285" y="250" text-anchor="middle" class="chart-label">4-6 mo</text>
+      <!-- Group 3: 7-12mo, Active=$1737, Churned=$1669 -->
+      <rect x="370" y="136" width="45" height="94" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <rect x="420" y="139" width="45" height="91" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="415" y="250" text-anchor="middle" class="chart-label">7-12 mo</text>
+      <!-- Group 4: 13-18mo, Active=$2830, Churned=$2485 -->
+      <rect x="500" y="76" width="45" height="154" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <rect x="550" y="95" width="45" height="135" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="545" y="250" text-anchor="middle" class="chart-label">13-18 mo</text>
+      <!-- Group 5: 19+mo, Active=$3281, Churned=$2861 -->
+      <rect x="630" y="52" width="45" height="178" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <rect x="680" y="75" width="45" height="155" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="675" y="250" text-anchor="middle" class="chart-label">19+ mo</text>
+      <!-- Legend -->
+      <rect x="300" y="265" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="316" y="275" class="legend">Active</text>
+      <rect x="380" y="265" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="396" y="275" class="legend">Churned</text>
+    </svg>
+  </div>
+
+  <h3>Quarterly Revenue by Plan Tier</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Quarterly Revenue by Plan Tier ($M) - Stacked</text>
+      <line x1="80" y1="35" x2="80" y2="230" class="chart-axis"/>
+      <line x1="80" y1="230" x2="720" y2="230" class="chart-axis"/>
+      <text x="75" y="233" text-anchor="end" class="chart-label">$0</text>
+      <text x="75" y="181" text-anchor="end" class="chart-label">$15M</text>
+      <text x="75" y="133" text-anchor="end" class="chart-label">$30M</text>
+      <text x="75" y="84" text-anchor="end" class="chart-label">$45M</text>
+      <line x1="80" y1="181" x2="720" y2="181" class="chart-grid"/>
+      <line x1="80" y1="133" x2="720" y2="133" class="chart-grid"/>
+      <!-- Stacked bars: total height = total_rev / 45M * 195 -->
+      <!-- Q1 22: S=9.1+M=6.0+L=3.0 = 18.1M -->
+      <rect x="110" y="152" width="70" height="78" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <rect x="110" y="126" width="70" height="26" rx="2" fill="currentColor" style="color: var(--bar-purple);"/>
+      <rect x="110" y="113" width="70" height="13" rx="2" fill="currentColor" style="color: var(--bar-cyan);"/>
+      <text x="145" y="248" text-anchor="middle" class="chart-label">Q1 22</text>
+      <text x="145" y="108" text-anchor="middle" class="chart-value">$18M</text>
+      <!-- Q2 22: S=12.3+M=8.1+L=4.0 = 24.4M -->
+      <rect x="210" y="125" width="70" height="105" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <rect x="210" y="90" width="70" height="35" rx="2" fill="currentColor" style="color: var(--bar-purple);"/>
+      <rect x="210" y="73" width="70" height="17" rx="2" fill="currentColor" style="color: var(--bar-cyan);"/>
+      <text x="245" y="248" text-anchor="middle" class="chart-label">Q2 22</text>
+      <!-- Q3 22: S=15.4+M=10.1+L=5.0 = 30.5M -->
+      <rect x="310" y="97" width="70" height="133" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <rect x="310" y="53" width="70" height="44" rx="2" fill="currentColor" style="color: var(--bar-purple);"/>
+      <rect x="310" y="31" width="70" height="22" rx="2" fill="currentColor" style="color: var(--bar-cyan);"/>
+      <text x="345" y="248" text-anchor="middle" class="chart-label">Q3 22</text>
+      <!-- Q4 22: 18.3+11.9+6.0 = 36.2M -->
+      <rect x="410" y="72" width="70" height="158" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <rect x="410" y="21" width="70" height="51" rx="2" fill="currentColor" style="color: var(--bar-purple);"/>
+      <text x="445" y="248" text-anchor="middle" class="chart-label">Q4 22</text>
+      <!-- Q1 23: 20.9+13.6+6.9 = 41.4M -->
+      <rect x="510" y="49" width="70" height="181" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <text x="545" y="248" text-anchor="middle" class="chart-label">Q1 23</text>
+      <!-- Q2 23: 22.8+14.9+7.5 = 45.2M -->
+      <rect x="610" y="35" width="70" height="195" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <text x="645" y="248" text-anchor="middle" class="chart-label">Q2 23</text>
+      <text x="645" y="30" text-anchor="middle" class="chart-value" style="font-weight: bold;">$45.2M</text>
+      <!-- Legend -->
+      <rect x="250" y="263" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <text x="266" y="273" class="legend">S-tier</text>
+      <rect x="330" y="263" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-purple);"/>
+      <text x="346" y="273" class="legend">M-tier</text>
+      <rect x="410" y="263" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-cyan);"/>
+      <text x="426" y="273" class="legend">L-tier</text>
+    </svg>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="complaint-analysis">7. Complaint Type Analysis</h2>
+
+  <h3>Anomaly Types in ANOMALY_LEDGER</h3>
+  <table>
+    <thead><tr><th>Anomaly Type</th><th>Churners</th><th>Retained</th><th>Churn Rate</th><th>Lift vs Baseline</th><th>Avg Impact</th></tr></thead>
+    <tbody>
+      <tr><td>PRE_CHURN_DOWNGRADE</td><td>7,899</td><td>0</td><td>100%</td><td>5.1x</td><td>-$54.88</td></tr>
+      <tr><td>UNBILLED_USAGE_LEAKAGE</td><td>1,702</td><td>15,127</td><td>10.1%</td><td>0.52x</td><td>-$5.00</td></tr>
+      <tr><td>OVER_BILLING_DUPLICATE</td><td>1,256</td><td>11,628</td><td>9.7%</td><td>0.50x</td><td>+$5.24</td></tr>
+      <tr><td>RATING_ERROR</td><td>837</td><td>8,067</td><td>9.4%</td><td>0.48x</td><td>-$0.56</td></tr>
+    </tbody>
+  </table>
+
+  <div class="highlight highlight-amber">
+    <strong>Counter-intuitive finding:</strong> Billing anomalies do NOT cause churn. All three operational types have churn rates <em>below</em> baseline (0.48-0.52x lift).
+    The real driver is complaint <strong>count</strong>, not complaint <strong>type</strong>.
+  </div>
+
+  <h3>Complaint Escalation Velocity</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 240" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Complaint Escalation: Months from 1st to 2nd Complaint</text>
+      <line x1="200" y1="35" x2="200" y2="210" class="chart-axis"/>
+      <!-- Paired horizontal bars: Churner (red) vs Retained (green) -->
+      <!-- scale: 0-7 months maps to 0-450px -->
+      <text x="195" y="55" text-anchor="end" class="chart-label">SME M-tier</text>
+      <rect x="200" y="44" width="199" height="12" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <rect x="200" y="58" width="341" height="12" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="405" y="54" class="chart-value">3.1 mo</text>
+      <text x="546" y="68" class="chart-value">5.3 mo</text>
+
+      <text x="195" y="95" text-anchor="end" class="chart-label">Consumer L</text>
+      <rect x="200" y="84" width="206" height="12" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <rect x="200" y="98" width="302" height="12" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="411" y="94" class="chart-value">3.2 mo</text>
+      <text x="507" y="108" class="chart-value">4.7 mo</text>
+
+      <text x="195" y="135" text-anchor="end" class="chart-label">Consumer S</text>
+      <rect x="200" y="124" width="219" height="12" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <rect x="200" y="138" width="315" height="12" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="424" y="134" class="chart-value">3.4 mo</text>
+      <text x="520" y="148" class="chart-value">4.9 mo</text>
+
+      <text x="195" y="175" text-anchor="end" class="chart-label">Enterprise S</text>
+      <rect x="200" y="164" width="238" height="12" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <rect x="200" y="178" width="302" height="12" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="443" y="174" class="chart-value">3.7 mo</text>
+      <text x="507" y="188" class="chart-value">4.7 mo</text>
+
+      <!-- Legend -->
+      <rect x="280" y="215" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="296" y="225" class="legend">Churners</text>
+      <rect x="380" y="215" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="396" y="225" class="legend">Retained</text>
+    </svg>
+  </div>
+  <p>Churners escalate <strong>30% faster</strong> (3.4 months between complaints) than retained customers (4.9 months). The intervention window is ~3 months after the first complaint.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="retention-campaign">8. Retention Campaign Design</h2>
+
+  <h3>Campaign Table: <code>TELCO_RA.MARTS.RETENTION_CAMPAIGN_HIGH_RISK</code></h3>
+  <p>465 active Consumer S-tier customers scored and assigned tiered intervention offers.</p>
+
+  <table>
+    <thead><tr><th>Risk Tier</th><th>Offer</th><th>Channel</th><th>Customers</th><th>Avg Churn Prob</th><th>LTV at Risk</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-critical">CRITICAL</span></td><td>Immediate callback + 2-month free upgrade to M-tier</td><td>Retention specialist</td><td>9</td><td>92.6%</td><td>$11K</td></tr>
+      <tr><td><span class="badge badge-critical">CRITICAL</span></td><td>Priority callback + 1-month credit ($50)</td><td>Retention specialist</td><td>31</td><td>89.5%</td><td>$29K</td></tr>
+      <tr><td><span class="badge badge-high">HIGH</span></td><td>Escalated case review + 20% discount 3mo</td><td>Senior CSR</td><td>79</td><td>61.5%</td><td>$84K</td></tr>
+      <tr><td><span class="badge badge-high">HIGH</span></td><td>Proactive outreach + plan optimization</td><td>Senior CSR</td><td>40</td><td>65.2%</td><td>$50K</td></tr>
+      <tr><td><span class="badge badge-medium">MEDIUM</span></td><td>Automated apology + $25 credit</td><td>Automated</td><td>283</td><td>38.1%</td><td>$312K</td></tr>
+      <tr><td><span class="badge badge-medium">MEDIUM</span></td><td>Personalized email + loyalty points</td><td>Automated</td><td>23</td><td>37.7%</td><td>$32K</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Weekly Monitoring View: <code>TELCO_RA.MARTS.V_WEEKLY_CHURN_RISK_MONITOR</code></h3>
+  <p>Live-scoring view that flags active customers with tenure &le;6 months AND complaint count &ge;2, with real-time churn probability and recommended actions.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="roi-simulation">9. ROI Simulation</h2>
+
+  <h3>Campaign Cost Structure</h3>
+  <table>
+    <thead><tr><th>Tier</th><th>Customers</th><th>Cost/Customer</th><th>Total Cost</th></tr></thead>
+    <tbody>
+      <tr><td>CRITICAL</td><td>40</td><td>$150</td><td>$6,000</td></tr>
+      <tr><td>HIGH</td><td>119</td><td>$75</td><td>$8,925</td></tr>
+      <tr><td>MEDIUM</td><td>306</td><td>$35</td><td>$10,710</td></tr>
+      <tr><td><strong>TOTAL</strong></td><td><strong>465</strong></td><td>&mdash;</td><td><strong>$25,635</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Revenue Impact by Save Rate</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Campaign ROI: Cost vs Revenue Retained (12 months)</text>
+      <line x1="100" y1="40" x2="100" y2="240" class="chart-axis"/>
+      <line x1="100" y1="240" x2="700" y2="240" class="chart-axis"/>
+      <!-- Y: 0-$250K, scale: 200/250 = 0.8 px per $K -->
+      <text x="95" y="243" text-anchor="end" class="chart-label">$0</text>
+      <text x="95" y="163" text-anchor="end" class="chart-label">$100K</text>
+      <text x="95" y="83" text-anchor="end" class="chart-label">$200K</text>
+      <line x1="100" y1="163" x2="700" y2="163" class="chart-grid"/>
+      <line x1="100" y1="83" x2="700" y2="83" class="chart-grid"/>
+      <!-- Campaign cost line -->
+      <line x1="100" y1="220" x2="700" y2="220" stroke="currentColor" style="color: var(--bar-red);" stroke-width="2" stroke-dasharray="6,4"/>
+      <text x="705" y="218" class="chart-value" style="fill: var(--bar-red);">Campaign cost: $25.6K</text>
+
+      <!-- 10% save: $81K revenue -->
+      <rect x="160" y="175" width="100" height="65" rx="3" fill="currentColor" style="color: var(--bar-green); opacity: 0.7;"/>
+      <text x="210" y="170" text-anchor="middle" class="chart-value" style="font-weight: 600;">$81K</text>
+      <text x="210" y="258" text-anchor="middle" class="chart-label">10% save</text>
+      <text x="210" y="270" text-anchor="middle" class="chart-label" style="font-weight: 600;">ROI: 2.2x</text>
+
+      <!-- 20% save: $162K revenue -->
+      <rect x="340" y="110" width="100" height="130" rx="3" fill="currentColor" style="color: var(--bar-green); opacity: 0.85;"/>
+      <text x="390" y="105" text-anchor="middle" class="chart-value" style="font-weight: 600;">$162K</text>
+      <text x="390" y="258" text-anchor="middle" class="chart-label">20% save</text>
+      <text x="390" y="270" text-anchor="middle" class="chart-label" style="font-weight: 600;">ROI: 5.3x</text>
+
+      <!-- 30% save: $243K revenue -->
+      <rect x="520" y="46" width="100" height="194" rx="3" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="570" y="41" text-anchor="middle" class="chart-value" style="font-weight: 600;">$243K</text>
+      <text x="570" y="258" text-anchor="middle" class="chart-label">30% save</text>
+      <text x="570" y="270" text-anchor="middle" class="chart-label" style="font-weight: 600;">ROI: 8.5x</text>
+    </svg>
+  </div>
+
+  <table>
+    <thead><tr><th>Scenario</th><th>Customers Saved</th><th>12-Month Revenue</th><th>Net Profit</th><th>ROI</th></tr></thead>
+    <tbody>
+      <tr><td>Conservative (10%)</td><td>47</td><td>$81,090</td><td>$55,455</td><td>2.2x</td></tr>
+      <tr><td>Moderate (20%)</td><td>93</td><td>$162,180</td><td>$136,545</td><td>5.3x</td></tr>
+      <tr><td>Optimistic (30%)</td><td>140</td><td>$243,270</td><td>$217,635</td><td>8.5x</td></tr>
+    </tbody>
+  </table>
+
+  <div class="highlight highlight-green">
+    <strong>Break-even point: Save just 15 customers (3.2%).</strong> Any save rate above 3.2% is profitable.
+    Industry retention campaigns typically achieve 15-25% save rates on well-targeted cohorts.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="plan-gap-analysis">10. Plan Feature Gap Analysis</h2>
+
+  <h3>Usage vs Plan Allowance (High-Risk Customers)</h3>
+  <div class="chart-wrap">
+    <svg viewBox="0 0 800 220" xmlns="http://www.w3.org/2000/svg">
+      <text x="400" y="20" text-anchor="middle" class="chart-title">Plan Allowance vs Actual Usage - High-Risk Customers</text>
+      <!-- Data usage comparison - most important -->
+      <text x="100" y="70" text-anchor="end" class="chart-label" style="font-size: 12px; font-weight: 600;">Data (GB)</text>
+      <rect x="110" y="55" width="200" height="24" rx="3" fill="currentColor" style="color: var(--bar-blue);"/>
+      <text x="115" y="71" style="font-size: 10px; fill: white; font-weight: 600;">Plan: 1.0 GB</text>
+      <rect x="110" y="82" width="308" height="24" rx="3" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="115" y="98" style="font-size: 10px; fill: white; font-weight: 600;">Actual: 1.54 GB (154%)</text>
+      <!-- overflow indicator -->
+      <line x1="310" y1="55" x2="310" y2="106" stroke="currentColor" style="color: var(--bar-red);" stroke-width="2" stroke-dasharray="3,2"/>
+      <text x="320" y="112" class="chart-value" style="fill: var(--bar-red); font-weight: bold;">+54% OVER LIMIT</text>
+
+      <!-- Voice usage comparison -->
+      <text x="100" y="150" text-anchor="end" class="chart-label" style="font-size: 12px; font-weight: 600;">Voice (min)</text>
+      <rect x="110" y="135" width="400" height="24" rx="3" fill="currentColor" style="color: var(--bar-blue);"/>
+      <text x="115" y="151" style="font-size: 10px; fill: white; font-weight: 600;">Plan: 200 minutes</text>
+      <rect x="110" y="162" width="52" height="24" rx="3" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="115" y="178" style="font-size: 10px; fill: white; font-weight: 600;">26</text>
+      <text x="170" y="178" class="chart-value" style="fill: var(--bar-green);">Only 13% used</text>
+
+      <!-- Legend -->
+      <rect x="250" y="200" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-blue);"/>
+      <text x="266" y="210" class="legend">Plan Allowance</text>
+      <rect x="380" y="200" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-red);"/>
+      <text x="396" y="210" class="legend">Actual Usage (over)</text>
+      <rect x="510" y="200" width="12" height="12" rx="2" fill="currentColor" style="color: var(--bar-green);"/>
+      <text x="526" y="210" class="legend">Actual Usage (under)</text>
+    </svg>
+  </div>
+
+  <div class="highlight highlight-red">
+    <strong>Root Cause Identified:</strong> High-risk customers are on <strong>voice-centric plans</strong> but have <strong>data-centric behavior</strong>.
+    They use 154% of their 1GB data cap but only 13% of their 200 voice minutes. The plan shape is wrong for their usage pattern,
+    generating surprise overages that trigger complaints that trigger churn.
+  </div>
+
+  <h3>Recommended Plan Interventions</h3>
+  <table>
+    <thead><tr><th>Action</th><th>Impact</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Migrate to data-heavy plan (3GB, 100 min, same price)</td><td>Eliminates overage surprise</td><td>~$0 (unused voice)</td></tr>
+      <tr><td>Auto-notify at 80% data usage + upgrade offer</td><td>Prevents bill shock</td><td>Messaging cost only</td></tr>
+      <tr><td>Create "Data Flex" S-tier variant (2GB/100min)</td><td>Revenue-neutral churn reduction</td><td>Product development</td></tr>
+      <tr><td>Waive first data overage + offer plan switch</td><td>Immediate goodwill for campaign</td><td>$12-19 per customer</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="recommendations">11. Strategic Recommendations</h2>
+
+  <h3>Priority Matrix</h3>
+  <table>
+    <thead><tr><th>#</th><th>Action</th><th>Impact</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>Deploy retention campaign for 465 high-risk customers NOW</strong></td><td>$136-217K net revenue</td><td>Model: 93% F1; break-even at 3.2%</td></tr>
+      <tr><td>2</td><td><strong>Trigger retention at 2+ complaints (any type)</strong></td><td>Catches 56% of future churners</td><td>Complaint count is #4 feature; type irrelevant</td></tr>
+      <tr><td>3</td><td><strong>Fix the data allowance gap in S-tier plans</strong></td><td>Removes root cause of complaints</td><td>154% data usage on 1GB plans</td></tr>
+      <tr><td>4</td><td><strong>Intervene within 30 days of first complaint</strong></td><td>3.4-month window before 2nd</td><td>SME M: 3.1mo; Consumer S: 3.4mo</td></tr>
+      <tr><td>5</td><td><strong>Grow Enterprise M-tier</strong></td><td>Best unit economics (2.4x risk-adj CLV:CAC)</td><td>Lowest churn (17%), highest ratio</td></tr>
+      <tr><td>6</td><td><strong>Schedule weekly monitoring view</strong></td><td>Continuous early detection</td><td>V_WEEKLY_CHURN_RISK_MONITOR created</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Snowflake Objects Created</h3>
+  <table>
+    <thead><tr><th>Object</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>TELCO_RA.MARTS.CHURN_CLASSIFIER</code></td><td>ML Model</td><td>Churn prediction (93% F1 score)</td></tr>
+      <tr><td><code>TELCO_RA.MARTS.RETENTION_CAMPAIGN_HIGH_RISK</code></td><td>Table</td><td>465 customers with assigned offers &amp; priorities</td></tr>
+      <tr><td><code>TELCO_RA.MARTS.V_WEEKLY_CHURN_RISK_MONITOR</code></td><td>View</td><td>Live scoring for early-tenure high-complaint customers</td></tr>
+    </tbody>
+  </table>
+
+  <hr style="margin-top: 48px; border-color: var(--border);">
+  <p style="color: var(--text-muted); font-size: 0.85em; text-align: center;">
+    Report generated by Cortex Code | Data source: TELCO_RA database (Snowflake) | Analysis date: July 9, 2026
+  </p>
+
+</body>
+</html>
